@@ -28,7 +28,7 @@ const SERVER_PORT = 3001;
 const CONTEXT_PATH = '/nodejs';
 
 opentracing.initGlobalTracer(new hawkularAPM.APMTracer({
-    recorder: new hawkularAPM.HttpRecorder('http://hawkular-apm:9080', 'jdoe', 'password'),
+    recorder: new hawkularAPM.HttpRecorder(process.env.HAWKULAR_APM_URI, process.env.HAWKULAR_APM_USERNAME, process.env.HAWKULAR_APM_PASSWORD),
     sampler: new hawkularAPM.AlwaysSample(),
 }));
 

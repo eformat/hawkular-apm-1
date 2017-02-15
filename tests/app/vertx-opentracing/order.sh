@@ -19,7 +19,7 @@ echo "Creating an order for account=$1 item=$2 quantity=$3"
 
 data="{\"accountId\":\"$1\",\"itemId\":\"$2\",\"quantity\": $3}"
 
-curl -X POST -H "Content-Type: application/json" -d "$data" http://localhost:8180/orders
+curl -X POST -H "Content-Type: application/json" -d "$data" http://vertx-opentracing-hawkular-apm.192.168.137.3.xip.io/orders
 
 echo
 echo

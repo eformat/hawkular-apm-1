@@ -19,7 +19,7 @@ echo "List orders for account=$1"
 
 data="{\"accountId\":\"$1\"}"
 
-curl -X GET -H "Content-Type: application/json" -d "$data" http://localhost:8180/orders
+curl -X GET -H "Content-Type: application/json" -d "$data" http://vertx-opentracing-hawkular-apm.192.168.137.3.xip.io/orders
 
 echo
 echo
