@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2016 Red Hat, Inc. and/or its affiliates
+ * Copyright 2015-2017 Red Hat, Inc. and/or its affiliates
  * and other contributors as indicated by the @author tags.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,14 +18,18 @@ package org.hawkular.apm.agent.opentracing;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-import org.hawkular.apm.api.model.trace.ContainerNode;
 import org.hawkular.apm.api.utils.PropertyUtil;
-import org.hawkular.apm.client.opentracing.APMTracer;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.mockito.Mockito;
+
+import io.opentracing.Span;
+import io.opentracing.contrib.global.GlobalTracer;
+import io.opentracing.mock.MockTracer;
 
 /**
  * @author gbrown
@@ -35,20 +39,18 @@ public class OpenTracingManagerTest {
     private static final String OP1 = "OP1";
     private static final String OP2 = "OP2";
 
-    private static final TestTraceRecorder recorder = new TestTraceRecorder();
+    private static final MockTracer tracer = new MockTracer();
 
     @BeforeClass
     public static void initClass() {
         System.setProperty(PropertyUtil.HAWKULAR_APM_AGENT_STATE_EXPIRY_INTERVAL, "2000");
-
-        APMTracer tracer = (APMTracer) OpenTracingTracer.getSingleton();
-        tracer.setTraceRecorder(recorder);
+        GlobalTracer.register(tracer);
     }
 
     @Before
     public void clearTraces() {
         OpenTracingManager.reset();
-        recorder.clear();
+        tracer.reset();
     }
 
     @Test
@@ -66,10 +68,8 @@ public class OpenTracingManagerTest {
 
         assertFalse(otm.hasSpan());
 
-        assertEquals(1, recorder.getTraces().size());
-        assertEquals(1, recorder.getTraces().get(0).getNodes().size());
-        assertEquals(OP1, recorder.getTraces().get(0).getNodes().get(0).getOperation());
-        assertEquals(0, ((ContainerNode) recorder.getTraces().get(0).getNodes().get(0)).getNodes().size());
+        assertEquals(1, tracer.finishedSpans().size());
+        assertEquals(OP1, tracer.finishedSpans().get(0).operationName());
     }
 
     @Test
@@ -80,16 +80,13 @@ public class OpenTracingManagerTest {
         otm.startSpan(otm.getTracer().buildSpan(OP2));
         otm.finishSpan();
 
-        assertEquals(0, recorder.getTraces().size());
+        assertEquals(1, tracer.finishedSpans().size());
+        assertEquals(OP2, tracer.finishedSpans().get(0).operationName());
 
         otm.finishSpan();
 
-        assertEquals(1, recorder.getTraces().size());
-        assertEquals(1, recorder.getTraces().get(0).getNodes().size());
-        assertEquals(OP1, recorder.getTraces().get(0).getNodes().get(0).getOperation());
-        assertEquals(1, ((ContainerNode) recorder.getTraces().get(0).getNodes().get(0)).getNodes().size());
-        assertEquals(OP2,
-                ((ContainerNode) recorder.getTraces().get(0).getNodes().get(0)).getNodes().get(0).getOperation());
+        assertEquals(2, tracer.finishedSpans().size());
+        assertEquals(OP1, tracer.finishedSpans().get(1).operationName());
     }
 
     @Test
@@ -117,7 +114,7 @@ public class OpenTracingManagerTest {
 
         assertFalse(otm.hasSpan());
 
-        assertEquals(1, recorder.getTraces().size());
+        assertEquals(1, tracer.finishedSpans().size());
     }
 
     @Test
@@ -149,12 +146,67 @@ public class OpenTracingManagerTest {
 
         assertTrue(otm.includePath("/path/to/anything"));
         assertTrue(otm.includePath("/path.to/anything"));
+        assertTrue(otm.includePath("/path.to/anything.jsp"));
         assertTrue(otm.includePath("anything"));
 
         assertFalse(otm.includePath("/hawkular/apm/anything"));
+        assertFalse(otm.includePath("/path.to/anything.xjsp"));
         assertFalse(otm.includePath("myimage.png"));
         assertFalse(otm.includePath("/myimage.png"));
         assertFalse(otm.includePath("/location/myimage.png"));
+    }
+
+    @Test
+    public void testPathIncludeWhitelist() {
+        OpenTracingManager.fileExtensionWhitelist.add("foo");
+
+        OpenTracingManager otm = new OpenTracingManager(null);
+
+        assertTrue(otm.includePath("/quux/test.foo"));
+        assertFalse(otm.includePath("/my/image.bar"));
+
+        OpenTracingManager.fileExtensionWhitelist.clear();
+    }
+
+    @Test
+    public void testCurrentSpanId() {
+        OpenTracingManager.TraceState ts = new OpenTracingManager.TraceState();
+        ts.pushSpan(Mockito.mock(Span.class), "1");
+        assertEquals("1", ts.peekId());
+    }
+
+    @Test
+    public void testHasSpanForId() {
+        OpenTracingManager.TraceState ts = new OpenTracingManager.TraceState();
+        Span span = Mockito.mock(Span.class);
+        ts.pushSpan(span, "1");
+        ts.popSpan();
+        assertNull(ts.peekId());
+        assertEquals(span, ts.getSpanForId("1"));
+    }
+
+    @Test
+    public void joinedPathsHaveSingleSlash() {
+        OpenTracingManager otm = new OpenTracingManager(null);
+        String result = otm.sanitizePaths("http://localhost:8080/jaxrs-uri-template-1.0-SNAPSHOT/app/", "/download/file/{path:.+}");
+        assertEquals("http://localhost:8080/jaxrs-uri-template-1.0-SNAPSHOT/app/download/file/{path:.+}", result);
+    }
+
+    @Test
+    public void noopWhenJoinedPathsAreOk() {
+        OpenTracingManager otm = new OpenTracingManager(null);
+        String result = otm.sanitizePaths("http://localhost:8080/jaxrs-uri-template-1.0-SNAPSHOT/app", "/download/file/{path:.+}");
+        assertEquals("http://localhost:8080/jaxrs-uri-template-1.0-SNAPSHOT/app/download/file/{path:.+}", result);
+
+        result = otm.sanitizePaths("http://localhost:8080/jaxrs-uri-template-1.0-SNAPSHOT/app", "download/file/{path:.+}");
+        assertEquals("http://localhost:8080/jaxrs-uri-template-1.0-SNAPSHOT/app/download/file/{path:.+}", result);
+    }
+
+    @Test
+    public void slashIsAddedWhenNoneExists() {
+        OpenTracingManager otm = new OpenTracingManager(null);
+        String result = otm.sanitizePaths("http://localhost:8080/jaxrs-uri-template-1.0-SNAPSHOT/app", "download/file/{path:.+}");
+        assertEquals("http://localhost:8080/jaxrs-uri-template-1.0-SNAPSHOT/app/download/file/{path:.+}", result);
     }
 
 }

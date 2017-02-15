@@ -1,5 +1,5 @@
 ///
-/// Copyright 2015-2016 Red Hat, Inc. and/or its affiliates
+/// Copyright 2015-2017 Red Hat, Inc. and/or its affiliates
 /// and other contributors as indicated by the @author tags.
 ///
 /// Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,14 +28,17 @@ module InstanceViewDiagram {
     //private render = new dagreD3.render();
     public link: (scope, elm, attrs, ctrl) => any;
 
-    constructor(public $compile, hkDurationFilter) {
+    constructor(public $compile, $sce, hkDurationFilter) {
       // necessary to ensure 'this' is this object <sigh>
       this.link = (scope, elm, attrs, ctrl) => {
-        return this.doLink(scope, elm, attrs, ctrl, $compile, hkDurationFilter);
+        return this.doLink(scope, elm, attrs, ctrl, $compile, $sce, hkDurationFilter);
       };
     }
 
-    private doLink(scope, elm, attrs, ctrl, $compile, hkDurationFilter): void {
+    private doLink(scope, elm, attrs, ctrl, $compile, $sce, hkDurationFilter): void {
+
+      // Severity strip width (must be pair)
+      let stripeWidth = 12;
 
       // Set up zoom support
       let svg = d3.select('svg#idetails'),
@@ -51,14 +54,18 @@ module InstanceViewDiagram {
       render.shapes().producer = function(parent, bbox, node) {
         let w = bbox.width + 10,
             h = bbox.height + 10,
-            points = [
-              { x:     0,      y:     0 },
-              { x:     w,      y:     0 },
-              { x:     w + 10, y:     -h / 2 },
-              { x:     w,      y:     -h },
-              { x:     0,      y:     -h },
-              { x:     0,      y:     0 }
-            ];
+            points = [{ x: 0, y: 0 }];
+            for (let i = 0; i < stripeWidth; i++) {
+              points.push({'x': i, y: (i % 2 === 0 ? 0 : -h)});
+              points.push({'x': i, y: (i % 2 !== 0 ? 0 : -h)});
+            }
+            points = points.concat([
+              { x: w,      y: 0 },
+              { x: w + 10, y: -h / 2 },
+              { x: w,      y: -h },
+              { x: 0,      y: -h },
+              { x: 0,      y: 0 }
+            ]);
             let shapeSvg = parent.insert('polygon', ':first-child')
               .attr('points', points.map(function(d) { return d.x + ',' + d.y; }).join(' '))
               .attr('transform', 'translate(' + (-w / 1.85) + ',' + (h * 4 / 8) + ')');
@@ -73,14 +80,17 @@ module InstanceViewDiagram {
       render.shapes().consumer = function(parent, bbox, node) {
         let w = bbox.width + 20,
             h = bbox.height + 10,
-            points = [
-              { x:     0, y:          0 },
-              { x:     w, y:          0 },
-              { x:     w, y:          -h },
-              { x:     0, y:          -h },
-              { x:     10, y:         -h / 2 },
-              { x:     0, y:          0 }
-            ];
+            points = [{ x: 0, y: 0 }];
+            for (let i = 0; i < stripeWidth + 1; i++) {
+              points.push({'x': i, y: (i % 2 === 0 ? 0 : -h)});
+              points.push({'x': i + 10, y: -h / 2});
+              points.push({'x': i, y: (i % 2 !== 0 ? 0 : -h)});
+            }
+            points = points.concat([
+              { x:  w, y: -h },
+              { x:  w, y: 0 },
+              { x: 10, y: 0 },
+            ]);
             let shapeSvg = parent.insert('polygon', ':first-child')
               .attr('points', points.map(function(d) { return d.x + ',' + d.y; }).join(' '))
               .attr('transform', 'translate(' + (-w / 2.15) + ',' + (h * 4 / 8) + ')');
@@ -95,15 +105,20 @@ module InstanceViewDiagram {
       render.shapes().component = function(parent, bbox, node) {
         let w = bbox.width + 20,
             h = bbox.height + 8,
-            points = [
-              { x:     -10,    y:     -h / 2 },
-              { x:     0,      y:     -h },
-              { x:     w - 10, y:     -h },
-              { x:     w,      y:     -h / 2 },
-              { x:     w - 10, y:     0 },
-              { x:     0,      y:     0 },
-              { x:     -10,    y:     -h / 2 }
-            ];
+            points = [];
+            for (let i = stripeWidth; i >= 0; i--) {
+              points.push({'x': i, y: (i % 2 === 0 ? 0 : -h)});
+              points.push({'x': i - stripeWidth, y: -h / 2});
+              points.push({'x': i, y: (i % 2 !== 0 ? 0 : -h)});
+            }
+            points = points.concat([
+              { x: 10,     y: -h  },
+              { x: w - 10, y: -h },
+              { x: w,      y: -h / 2 },
+              { x: w - 10, y: 0 },
+              { x: 10,     y: 0 },
+              { x: 0,      y: -h / 2 }
+            ]);
             let shapeSvg = parent.insert('polygon', ':first-child')
               .attr('points', points.map(function(d) { return d.x + ',' + d.y; }).join(' '))
               .attr('transform', 'translate(' + (-w / 2.1) + ',' + (h * 4 / 8) + ')');
@@ -175,17 +190,26 @@ module InstanceViewDiagram {
 
           let uri = (d.uri || '') + (d.operation ? ('[' + d.operation + ']') : '');
 
-          let label = '<span class="name service-name">' + (serviceName || '') + '</span>';
+          let label = '<span class="name service-name">' + (serviceName || '&nbsp;') + '</span>';
           label += '<div class="name">' + uri + '</div>';
 
           let nodeTT = '<ul>';
+          let hasFault = false;
           _.each(d.properties, (property) => {
-            nodeTT += ('<li class=\'tt-prop\'><strong>' + property.name + '</strong> ' + property.value + '</li>');
+            if (!!property.value) {
+              nodeTT += ('<li class=\'tt-prop\'><strong>' + property.name + '</strong> ' + property.value + '</li>');
+              if (property.name === 'fault' ||
+                (property.name === 'error' && property.value.toLowerCase() !== 'false')) {
+                hasFault = true;
+              }
+            }
           });
           nodeTT += '</ul>';
+          let tooltipId = d.customId.replace(/\W+/g, '_');
+          scope[tooltipId] = $sce.trustAsHtml(nodeTT);
 
-          let html = '<div' + ((nodeTT.length > 9) ? (' tooltip-append-to-body="true" tooltip-class="graph-tooltip"' +
-            'tooltip-html-unsafe="' + nodeTT + '"') : '') + '>';
+          let html = '<div class="node-label"' + ((nodeTT.length > 9) ? (' tooltip-append-to-body="true" ' +
+            'tooltip-class="graph-tooltip" tooltip-html="' + tooltipId + '"') : '') + '>';
           if (theShape === 'circle') {
             label = '<div><i class="fa fa-share-alt spawn"></i></div>';
           } else {
@@ -195,6 +219,11 @@ module InstanceViewDiagram {
             label += '    ' + hkDurationFilter(d.duration);
             label += '  </span>';
             label += '</span>';
+            if (hasFault) {
+              label += '<span class="pull-right fault-indicator">';
+              label += '  <i class="fa fa-warning"></i>';
+              label += '</span>';
+            }
           }
           label += '</div>';
           html += label;
@@ -210,7 +239,7 @@ module InstanceViewDiagram {
             shape: theShape,
             labelType: 'html',
             label: html,
-            class: 'entity ' + theShape,
+            class: 'entity severity' + d.severity + ' ' + theShape,
             rx: 5,
             ry: 5,
             padding: 0

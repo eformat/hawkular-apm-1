@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2016 Red Hat, Inc. and/or its affiliates
+ * Copyright 2015-2017 Red Hat, Inc. and/or its affiliates
  * and other contributors as indicated by the @author tags.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,7 +21,7 @@ import java.util.Map;
 import org.hawkular.apm.api.model.Constants;
 import org.hawkular.apm.api.model.Property;
 
-import io.opentracing.APMSpan;
+import io.opentracing.impl.APMSpan;
 
 /**
  * This node processor implementation provides the default mapping behaviour from

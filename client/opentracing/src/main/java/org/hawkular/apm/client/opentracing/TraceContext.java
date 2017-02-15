@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2016 Red Hat, Inc. and/or its affiliates
+ * Copyright 2015-2017 Red Hat, Inc. and/or its affiliates
  * and other contributors as indicated by the @author tags.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -35,7 +35,7 @@ import org.hawkular.apm.api.utils.PropertyUtil;
 import org.hawkular.apm.client.api.recorder.TraceRecorder;
 import org.hawkular.apm.client.api.sampler.ContextSampler;
 
-import io.opentracing.APMSpan;
+import io.opentracing.impl.APMSpan;
 import io.opentracing.tag.Tags;
 
 /**

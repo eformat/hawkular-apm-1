@@ -1,5 +1,5 @@
 ///
-/// Copyright 2015-2016 Red Hat, Inc. and/or its affiliates
+/// Copyright 2015-2017 Red Hat, Inc. and/or its affiliates
 /// and other contributors as indicated by the @author tags.
 ///
 /// Licensed under the Apache License, Version 2.0 (the "License");
@@ -163,11 +163,14 @@ module E2E {
 
       // Table sorting
       $scope.sortKey = 'timestamp';
-      $scope.reverse = false;
+      $scope.reverse = true;
 
       $scope.sort = function(keyname) {
-        $scope.sortKey = keyname; // set the sortKey to the param passed
-        $scope.reverse = !$scope.reverse; // if true make it false and vice versa
+        if ($scope.sortKey === keyname) {
+          $scope.reverse = !$scope.reverse; // if true make it false and vice versa
+        } else {
+          $scope.sortKey = keyname; // set the sortKey to the param passed
+        }
       };
 
       $scope.durationRange = function (entry) {
@@ -178,11 +181,42 @@ module E2E {
       // Pagination
       $scope.numPerPage = 15;
 
+      let getMaxDuration = function(nodes, maxDuration) {
+        _.forEach(nodes, (node: any) => {
+          maxDuration = node.duration > maxDuration ? node.duration : maxDuration;
+          if(node.nodes && node.nodes.length > 0) {
+            maxDuration = getMaxDuration(node.nodes, maxDuration);
+          }
+        });
+        return maxDuration;
+      };
+
+      let calcSeverity = function(nodes, maxDuration) {
+        _.forEach(nodes, (node: any) => {
+          let percentage = node.duration / maxDuration;
+          if (percentage >= 0.8) {
+            node.severity = 4;
+          } else if (percentage >= 0.6) {
+            node.severity = 3;
+          } else if (percentage >= 0.4) {
+            node.severity = 2;
+          } else if (percentage >= 0.2) {
+            node.severity = 1;
+          } else {
+            node.severity = 0;
+          }
+          if(node.nodes && node.nodes.length > 0) {
+            calcSeverity(node.nodes, maxDuration);
+          }
+        });
+      };
+
       $scope.showIVD = function(txId) {
         if ($scope.selectedTx === txId) {
           $scope.selectedTx = '';
         } else {
           $http.get('/hawkular/apm/traces/complete/' + txId).then(function(resp) {
+            calcSeverity(resp.data.nodes, getMaxDuration(resp.data.nodes, 0));
             $scope.instDetails = resp.data.nodes;
             $scope.selectedTx = txId;
           });

@@ -1,5 +1,5 @@
 ///
-/// Copyright 2015-2016 Red Hat, Inc. and/or its affiliates
+/// Copyright 2015-2017 Red Hat, Inc. and/or its affiliates
 /// and other contributors as indicated by the @author tags.
 ///
 /// Licensed under the Apache License, Version 2.0 (the "License");
@@ -124,7 +124,7 @@ module FilterSidebar {
       }
 
       if (scope.fsb.showProps) {
-        scope.$watch('selPropName', (newValue, oldValue) => {
+        $rootScope.$watch('sbFilter.selPropName', (newValue, oldValue) => {
           if (newValue && newValue !== oldValue) {
             this.updatePropertyValues(newValue);
           }
@@ -133,11 +133,11 @@ module FilterSidebar {
     }
 
     private updatePropertyValues = function(newValue) {
-      this.theScope.propertyValues = [];
+      this.theScope.sbPropertyValues = [];
       let propVal = this.$http.get('/hawkular/apm/analytics/trace/completion/property/' + newValue.name +
         '?criteria=' + encodeURI(angular.toJson(this.$rootScope.sbFilter.criteria)));
       propVal.then((resp) => {
-        this.theScope.propertyValues = resp.data;
+        this.theScope.sbPropertyValues = resp.data;
       });
     };
 
