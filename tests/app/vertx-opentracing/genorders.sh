@@ -30,7 +30,7 @@ do
 
     data="{\"accountId\":\"$accountId\",\"itemId\":\"$itemId\",\"quantity\": $quantity}"
 
-    curl -X POST -H "Content-Type: application/json" -d "$data" http://localhost:8180/orders
+    curl -X POST -H "Content-Type: application/json" -d "$data" http://vertx-opentracing-hawkular-apm.192.168.137.3.xip.io/orders
 
     echo
     echo
